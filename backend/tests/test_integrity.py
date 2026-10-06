@@ -178,3 +178,36 @@ def test_hash_router_maps_runtime_error_to_409(client, monkeypatch, tmp_path):
     resp = client.post(f"/api/evidence/{ev_id}/hash")
     assert resp.status_code == 409
     assert resp.json()["detail"] == "Evidence already hashed"
+
+import pytest
+
+@pytest.mark.parametrize("endpoint,method", [
+    ("verify", "verify_evidence"),
+    ("hash", "hash_evidence"),
+    ("detect-format", "detect_evidence_format"),
+    ("detect-vendor", "detect_evidence_vendor")
+])
+def test_os_file_errors_are_generic(client, monkeypatch, tmp_path, endpoint, method):
+    from app.services.evidence_service import EvidenceService
+    
+    def mock_method(*args, **kwargs):
+        raise FileNotFoundError("[Errno 2] No such file or directory: 'D:\\secret\\raw\\x'")
+        
+    monkeypatch.setattr(EvidenceService, method, mock_method)
+    
+    case_id = create_case(client)
+    ev_id = register_evidence(client, case_id)
+    test_file = tmp_path / "abc.bin"
+    test_file.write_bytes(b"abc")
+    with open(test_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("abc.bin", f)})
+        
+    if endpoint in ("verify", "detect-format", "detect-vendor"):
+        client.post(f"/api/evidence/{ev_id}/hash")
+        
+    resp = client.post(f"/api/evidence/{ev_id}/{endpoint}")
+    
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Stored evidence file missing"
+    assert "secret" not in resp.text
+    assert "D:" not in resp.text

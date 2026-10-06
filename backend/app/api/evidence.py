@@ -125,8 +125,8 @@ def detect_format_endpoint(evidence_id: str):
     try:
         EvidenceService.detect_evidence_format(evidence)
         return evidence
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Stored evidence file missing")
 
 @router.post("/api/evidence/{evidence_id}/detect-vendor", response_model=EvidenceResponse)
 def detect_vendor_endpoint(evidence_id: str):
