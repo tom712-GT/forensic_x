@@ -217,20 +217,30 @@ def test_detection_timestamps_match_other_timestamps(client, tmp_path):
     with open(test_file, "rb") as f:
         client.post(f"/api/evidence/{ev_id}/file", files={"file": ("vid.mp4", f)})
         
-    client.post(f"/api/evidence/{ev_id}/hash")
+    hash_resp = client.post(f"/api/evidence/{ev_id}/hash").json()
+    assert hash_resp["hashed_at"] is not None
+    assert hash_resp["hashed_at"].endswith("Z")
+    
     post_format_resp = client.post(f"/api/evidence/{ev_id}/detect-format").json()
+    assert post_format_resp["format_detection"] is not None
+    assert post_format_resp["format_detection"]["detected_at"].endswith("Z")
+    
     post_vendor_resp = client.post(f"/api/evidence/{ev_id}/detect-vendor").json()
+    assert post_vendor_resp["vendor_detection"] is not None
+    assert post_vendor_resp["vendor_detection"]["detected_at"].endswith("Z")
     
     get_resp = client.get(f"/api/evidence/{ev_id}").json()
     
-    for resp in (post_format_resp, post_vendor_resp, get_resp):
-        if "format_detection" in resp and resp["format_detection"]:
-            assert resp["format_detection"]["detected_at"].endswith("Z")
-        if "vendor_detection" in resp and resp["vendor_detection"]:
-            assert resp["vendor_detection"]["detected_at"].endswith("Z")
-        if "hashed_at" in resp and resp["hashed_at"]:
-            assert resp["hashed_at"].endswith("Z")
-        assert resp["registered_at"].endswith("Z")
+    assert get_resp["registered_at"] is not None
+    assert get_resp["registered_at"].endswith("Z")
+    assert get_resp["ingested_at"] is not None
+    assert get_resp["ingested_at"].endswith("Z")
+    assert get_resp["hashed_at"] is not None
+    assert get_resp["hashed_at"].endswith("Z")
+    assert get_resp["format_detection"] is not None
+    assert get_resp["format_detection"]["detected_at"].endswith("Z")
+    assert get_resp["vendor_detection"] is not None
+    assert get_resp["vendor_detection"]["detected_at"].endswith("Z")
 
 def test_schema_creation_is_repeatable(client):
     with database.get_connection() as conn:
