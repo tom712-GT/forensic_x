@@ -223,3 +223,6 @@ def analyze_filesystem_endpoint(evidence_id: str):
         return evidence
     except FileNotFoundError:
         _raise_audit("FILESYSTEM_ANALYZE", "NOT_FOUND", 404, "STORED_FILE_MISSING", case_id=case_id, evidence_id=evidence_id, detail_msg="Stored evidence file missing")
+    except Exception:
+        logger.exception("Unexpected exception during filesystem analysis")
+        _raise_audit("FILESYSTEM_ANALYZE", "ERROR", 500, "INTERNAL_ERROR", case_id=case_id, evidence_id=evidence_id, detail_msg="Internal error while analyzing filesystem")

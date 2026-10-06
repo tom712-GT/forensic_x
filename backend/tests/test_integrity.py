@@ -206,7 +206,8 @@ import pytest
     ("verify", "verify_evidence"),
     ("hash", "hash_evidence"),
     ("detect-format", "detect_evidence_format"),
-    ("detect-vendor", "detect_evidence_vendor")
+    ("detect-vendor", "detect_evidence_vendor"),
+    ("analyze-filesystem", "analyze_evidence_filesystem")
 ])
 def test_os_file_errors_are_generic(client, monkeypatch, tmp_path, endpoint, method):
     from app.services.evidence_service import EvidenceService
