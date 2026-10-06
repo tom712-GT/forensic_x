@@ -215,7 +215,8 @@ def analyze_filesystem_endpoint(evidence_id: str):
         
         details = {
             "container_type": evidence.filesystem_analysis["container_type"],
-            "filesystem_type": evidence.filesystem_analysis["filesystem_type"]
+            "filesystem_type": evidence.filesystem_analysis["filesystem_type"],
+            "status": evidence.filesystem_analysis["status"]
         }
             
         _audit("FILESYSTEM_ANALYZE", "SUCCESS", 200, case_id=case_id, evidence_id=evidence_id, details=details)

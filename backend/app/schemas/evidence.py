@@ -25,6 +25,7 @@ class FilesystemDetectionResult(BaseModel):
     detected_at: datetime
     container_type: str
     filesystem_type: str
+    status: str
 
 class EvidenceResponse(BaseModel):
     """

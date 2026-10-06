@@ -241,8 +241,8 @@ class EvidenceService:
             raise FileNotFoundError("Stored evidence file missing")
             
         with open(evidence.stored_path, "rb") as f:
-            # Need at least 8192 for EXT4 which is at 1080 bytes offset
-            header = f.read(8192)
+            # Need at least 65536 for ISO 9660 which is at 32769 bytes offset
+            header = f.read(65536)
             
         from app.forensic.filesystem_inspector import inspect_filesystem
         res = inspect_filesystem(header)
