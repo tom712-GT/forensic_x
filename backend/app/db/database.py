@@ -55,7 +55,42 @@ def _init_schema(conn):
             """)
             
             cursor.execute("PRAGMA user_version = 1")
-            conn.commit()
+            
+        if version < 2:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS audit_log (
+                    audit_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    http_status INTEGER NOT NULL,
+                    case_id TEXT NULL,
+                    evidence_id TEXT NULL,
+                    actor TEXT NOT NULL DEFAULT 'UNAUTHENTICATED',
+                    details TEXT NOT NULL
+                )
+            """)
+            
+            # Basic protection, NOT tamper-proof (someone with the database file can drop the triggers)
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS prevent_audit_log_update
+                BEFORE UPDATE ON audit_log
+                BEGIN
+                    SELECT RAISE(ABORT, 'audit_log is append-only');
+                END;
+            """)
+            
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS prevent_audit_log_delete
+                BEFORE DELETE ON audit_log
+                BEGIN
+                    SELECT RAISE(ABORT, 'audit_log is append-only');
+                END;
+            """)
+            
+            cursor.execute("PRAGMA user_version = 2")
+            
+        conn.commit()
         _schema_initialized = True
 
 @contextmanager
