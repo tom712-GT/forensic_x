@@ -2,8 +2,18 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 from app.schemas.case import CaseCreate, CaseResponse
 from app.services.case_service import CaseService
+from app.services.audit_service import AuditService
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
+
+def _audit(outcome: str, status: int, case_id: str, details: dict = None):
+    AuditService.record(
+        action="CASE_CREATE",
+        outcome=outcome,
+        http_status=status,
+        case_id=case_id,
+        details=details
+    )
 
 @router.post("", response_model=CaseResponse, status_code=201)
 def create_case(case_data: CaseCreate):
@@ -13,6 +23,7 @@ def create_case(case_data: CaseCreate):
     Evidence (like CCTV footage) will later be attached to this case.
     """
     new_case = CaseService.create_case(case_data)
+    _audit("SUCCESS", 201, new_case.case_id, {})
     return new_case
 
 @router.get("", response_model=List[CaseResponse])

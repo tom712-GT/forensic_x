@@ -148,3 +148,242 @@ def test_audit_insert_is_parameterized(tmp_path, monkeypatch):
         
         assert rows[0][0] == malicious_id
         assert rows[1][0] == "x" * 100
+
+def test_audit_lifecycle(client, tmp_path):
+    from app.repositories.audit_repository import AuditRepository
+    from app.repositories.evidence_repository import EvidenceRepository
+    
+    # CASE_CREATE
+    case_resp = client.post("/api/cases", json={"case_name": "Audit Case"})
+    case_id = case_resp.json()["case_id"]
+    
+    # EVIDENCE_REGISTER
+    ev_resp = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "test.bin", "evidence_type": "VIDEO", "file_size": 4})
+    ev_id = ev_resp.json()["evidence_id"]
+    
+    # EVIDENCE_INGEST
+    test_file = tmp_path / "test.bin"
+    test_file.write_bytes(b"IMKH")
+    with open(test_file, "rb") as f:
+        ingest_resp = client.post(f"/api/evidence/{ev_id}/file", files={"file": ("test.bin", f)})
+        
+    # EVIDENCE_HASH
+    hash_resp = client.post(f"/api/evidence/{ev_id}/hash")
+    ev_sha256 = hash_resp.json()["sha256"]
+    
+    # EVIDENCE_VERIFY
+    verify_resp = client.post(f"/api/evidence/{ev_id}/verify")
+    
+    # FORMAT_DETECT
+    fmt_resp = client.post(f"/api/evidence/{ev_id}/detect-format")
+    
+    # VENDOR_DETECT
+    vnd_resp = client.post(f"/api/evidence/{ev_id}/detect-vendor")
+    
+    entries = AuditRepository.list_entries(case_id=case_id)
+    assert len(entries) == 7
+    
+    actions = [e["action"] for e in entries]
+    assert actions == ["CASE_CREATE", "EVIDENCE_REGISTER", "EVIDENCE_INGEST", "EVIDENCE_HASH", "EVIDENCE_VERIFY", "FORMAT_DETECT", "VENDOR_DETECT"]
+    
+    for e in entries:
+        assert e["outcome"] == "SUCCESS"
+        assert str(e["http_status"]).startswith("2")
+        
+    # Check details
+    hash_detail = json.loads(entries[3]["details"])
+    assert hash_detail["sha256"] == ev_sha256
+    
+    verify_detail = json.loads(entries[4]["details"])
+    assert verify_detail["match"] is True
+
+def test_rejected_attempts_are_logged(client, tmp_path, monkeypatch):
+    from app.repositories.audit_repository import AuditRepository
+    from app.services.evidence_service import EvidenceService
+    
+    case_resp = client.post("/api/cases", json={"case_name": "Rejections"})
+    case_id = case_resp.json()["case_id"]
+    
+    ev_resp = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "test.bin", "evidence_type": "VIDEO", "file_size": 4})
+    ev_id = ev_resp.json()["evidence_id"]
+    
+    test_file = tmp_path / "test.bin"
+    test_file.write_bytes(b"abcd")
+    empty_file = tmp_path / "empty.bin"
+    empty_file.write_bytes(b"")
+    
+    # hash before ingest
+    client.post(f"/api/evidence/{ev_id}/hash")
+    
+    # verify before hash
+    client.post(f"/api/evidence/{ev_id}/verify")
+    
+    # detect format before ingest
+    client.post(f"/api/evidence/{ev_id}/detect-format")
+    
+    # ingest over limit
+    monkeypatch.setattr("app.api.evidence.MAX_UPLOAD_BYTES", 2)
+    with open(test_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("test.bin", f)})
+    monkeypatch.setattr("app.api.evidence.MAX_UPLOAD_BYTES", 100*1024*1024)
+    
+    # empty upload
+    with open(empty_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("empty.bin", f)})
+        
+    # success upload
+    with open(test_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("test.bin", f)})
+        
+    # second upload
+    with open(test_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("test.bin", f)})
+        
+    # hash twice
+    client.post(f"/api/evidence/{ev_id}/hash")
+    client.post(f"/api/evidence/{ev_id}/hash")
+    
+    entries = AuditRepository.list_entries(evidence_id=ev_id)
+    rejections = [e for e in entries if e["outcome"] == "REJECTED"]
+    
+    reasons = [json.loads(e["details"]).get("reason") for e in rejections]
+    assert "NOT_INGESTED" in reasons
+    assert "NOT_HASHED" in reasons
+    assert "FILE_TOO_LARGE" in reasons
+    assert "EMPTY_FILE" in reasons
+    assert "ALREADY_INGESTED" in reasons
+    assert "ALREADY_HASHED" in reasons
+
+def test_unknown_ids_are_logged(client):
+    from app.repositories.audit_repository import AuditRepository
+    client.post("/api/evidence/random-ev/hash")
+    client.post("/api/cases/random-case/evidence", json={"original_filename": "a", "evidence_type": "VIDEO", "file_size": 1})
+    
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT action, outcome, details FROM audit_log WHERE outcome='NOT_FOUND'")
+        rows = cursor.fetchall()
+        reasons = [json.loads(r["details"]).get("reason") for r in rows]
+        assert "UNKNOWN_EVIDENCE" in reasons
+        assert "UNKNOWN_CASE" in reasons
+
+def test_verify_mismatch_is_integrity_failure(client, tmp_path):
+    from app.repositories.audit_repository import AuditRepository
+    from app.repositories.evidence_repository import EvidenceRepository
+    
+    case_resp = client.post("/api/cases", json={"case_name": "Tamper Case"})
+    case_id = case_resp.json()["case_id"]
+    ev_resp = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "a", "evidence_type": "VIDEO", "file_size": 3})
+    ev_id = ev_resp.json()["evidence_id"]
+    
+    test_file = tmp_path / "a.bin"
+    test_file.write_bytes(b"abc")
+    with open(test_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("a.bin", f)})
+        
+    client.post(f"/api/evidence/{ev_id}/hash")
+    
+    ev_db = EvidenceRepository.get_by_id(ev_id)
+    import os, stat
+    os.chmod(ev_db.stored_path, stat.S_IWRITE)
+    with open(ev_db.stored_path, "wb") as f:
+        f.write(b"tampered")
+        
+    client.post(f"/api/evidence/{ev_id}/verify")
+    
+    entries = AuditRepository.list_entries(evidence_id=ev_id)
+    verify_entry = next(e for e in entries if e["action"] == "EVIDENCE_VERIFY")
+    assert verify_entry["outcome"] == "INTEGRITY_FAILURE"
+    assert verify_entry["http_status"] == 200
+    
+    det = json.loads(verify_entry["details"])
+    assert det["match"] is False
+    assert "baseline_sha256" in det
+    assert "computed_sha256" in det
+
+def test_verify_missing_file_is_logged(client, tmp_path):
+    from app.repositories.audit_repository import AuditRepository
+    from app.repositories.evidence_repository import EvidenceRepository
+    import os
+    
+    case_resp = client.post("/api/cases", json={"case_name": "Missing Case"})
+    case_id = case_resp.json()["case_id"]
+    ev_resp = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "a", "evidence_type": "VIDEO", "file_size": 3})
+    ev_id = ev_resp.json()["evidence_id"]
+    
+    test_file = tmp_path / "a.bin"
+    test_file.write_bytes(b"abc")
+    with open(test_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("a.bin", f)})
+        
+    client.post(f"/api/evidence/{ev_id}/hash")
+    
+    ev_db = EvidenceRepository.get_by_id(ev_id)
+    import stat
+    os.chmod(ev_db.stored_path, stat.S_IWRITE)
+    os.remove(ev_db.stored_path)
+        
+    client.post(f"/api/evidence/{ev_id}/verify")
+    
+    entries = AuditRepository.list_entries(evidence_id=ev_id)
+    verify_entry = next(e for e in entries if e["action"] == "EVIDENCE_VERIFY")
+    assert verify_entry["outcome"] == "NOT_FOUND"
+    det = json.loads(verify_entry["details"])
+    assert det["reason"] == "STORED_FILE_MISSING"
+
+def test_unexpected_error_is_logged_generic(client, monkeypatch, tmp_path):
+    from app.services.evidence_service import EvidenceService
+    from app.repositories.audit_repository import AuditRepository
+    
+    def mock_hash(*args, **kwargs):
+        raise RuntimeError("D:\\secret\\x")
+        
+    monkeypatch.setattr(EvidenceService, "hash_evidence", mock_hash)
+    
+    case_resp = client.post("/api/cases", json={"case_name": "Error Case"})
+    case_id = case_resp.json()["case_id"]
+    ev_resp = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "a", "evidence_type": "VIDEO", "file_size": 3})
+    ev_id = ev_resp.json()["evidence_id"]
+    
+    test_file = tmp_path / "a.bin"
+    test_file.write_bytes(b"abc")
+    with open(test_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("a.bin", f)})
+        
+    client.post(f"/api/evidence/{ev_id}/hash")
+    
+    entries = AuditRepository.list_entries(evidence_id=ev_id)
+    err_entry = next(e for e in entries if e["action"] == "EVIDENCE_HASH")
+    assert err_entry["outcome"] == "ERROR"
+    det = json.loads(err_entry["details"])
+    assert det["reason"] == "INTERNAL_ERROR"
+    
+    # Check secret nowhere
+    for e in entries:
+        assert "secret" not in e["details"]
+        assert "secret" not in str(e)
+
+def test_audit_has_no_paths(client, tmp_path):
+    from app.repositories.audit_repository import AuditRepository
+    from app.services.evidence_service import RAW_STORAGE_ROOT
+    
+    entries = AuditRepository.list_entries()
+    for e in entries:
+        det = e["details"]
+        assert "stored_path" not in det
+        assert str(RAW_STORAGE_ROOT) not in det
+
+def test_audit_failure_does_not_break_requests(client, monkeypatch, tmp_path):
+    from app.repositories.audit_repository import AuditRepository
+    
+    def mock_insert(*args, **kwargs):
+        raise Exception("DB Down")
+        
+    monkeypatch.setattr(AuditRepository, "insert", mock_insert)
+    
+    case_resp = client.post("/api/cases", json={"case_name": "Audit Fail Case"})
+    assert case_resp.status_code == 201
+    case_id = case_resp.json()["case_id"]
+    
+    ev_resp = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "a", "evidence_type": "VIDEO", "file_size": 3})
+    assert ev_resp.status_code == 201
