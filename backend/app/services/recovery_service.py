@@ -1,6 +1,7 @@
 import os
 import stat
 import hashlib
+import sqlite3
 from pathlib import Path
 from app.models.evidence import Evidence
 from app.models.recovery import RecoveredArtifact
@@ -19,7 +20,7 @@ class RecoveryService:
         recovered_dir.mkdir(parents=True, exist_ok=True)
         
         results = []
-        # Basic deterministic deduplication using offset and type.
+        # Basic deterministic deduplication using offset and type during this scan.
         seen_artifacts = set()
         
         with open(evidence.stored_path, "rb") as f:
@@ -47,7 +48,11 @@ class RecoveryService:
                     status=status
                 )
                 
-                extension = art_type.lower()
+                if status == "CANDIDATE":
+                    extension = "bin"
+                else:
+                    extension = art_type.lower()
+                    
                 output_file = recovered_dir / f"{artifact.artifact_id}.{extension}"
                 artifact.output_path = str(output_file)
                 
@@ -57,7 +62,19 @@ class RecoveryService:
                 # Make the recovered artifact read-only for safety
                 os.chmod(output_file, stat.S_IREAD)
                 
-                RecoveryRepository.insert(artifact)
-                results.append(artifact)
+                try:
+                    RecoveryRepository.insert(artifact)
+                    results.append(artifact)
+                except sqlite3.IntegrityError:
+                    # Duplicate artifact. Clean up physical file and ignore.
+                    if output_file.exists():
+                        os.chmod(output_file, stat.S_IWRITE)
+                        output_file.unlink()
+                except Exception as e:
+                    # Other DB error. Clean up and raise.
+                    if output_file.exists():
+                        os.chmod(output_file, stat.S_IWRITE)
+                        output_file.unlink()
+                    raise e
                 
         return results

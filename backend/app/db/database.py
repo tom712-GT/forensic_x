@@ -121,6 +121,10 @@ def _init_schema(conn):
                 pass
             cursor.execute("PRAGMA user_version = 5")
             
+        if version < 6:
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_recovered_artifacts_dedup ON recovered_artifacts(evidence_id, source_offset, detected_type)")
+            cursor.execute("PRAGMA user_version = 6")
+            
         conn.commit()
         _schema_initialized = True
 
