@@ -35,3 +35,4 @@ class Evidence:
     hashed_at: Optional[datetime] = None
     format_detection: Optional[dict] = None
     vendor_detection: Optional[dict] = None
+    filesystem_analysis: Optional[dict] = None

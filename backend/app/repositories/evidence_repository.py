@@ -24,7 +24,8 @@ def _row_to_evidence(row) -> Evidence:
         sha256=row["sha256"],
         hashed_at=datetime.fromisoformat(row["hashed_at"]) if row["hashed_at"] else None,
         format_detection=json.loads(row["format_detection"]) if row["format_detection"] else None,
-        vendor_detection=json.loads(row["vendor_detection"]) if row["vendor_detection"] else None
+        vendor_detection=json.loads(row["vendor_detection"]) if row["vendor_detection"] else None,
+        filesystem_analysis=json.loads(row["filesystem_analysis"]) if "filesystem_analysis" in row.keys() and row["filesystem_analysis"] else None
     )
     return ev
 
@@ -132,6 +133,21 @@ class EvidenceRepository:
                 """,
                 (
                     json.dumps(vendor_detection),
+                    evidence_id
+                )
+            )
+
+    @staticmethod
+    def update_filesystem_analysis(evidence_id: str, filesystem_analysis: dict) -> None:
+        with get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE evidence
+                SET filesystem_analysis = ?
+                WHERE evidence_id = ?
+                """,
+                (
+                    json.dumps(filesystem_analysis),
                     evidence_id
                 )
             )

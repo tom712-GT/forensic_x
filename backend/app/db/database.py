@@ -90,6 +90,13 @@ def _init_schema(conn):
             
             cursor.execute("PRAGMA user_version = 2")
             
+        if version < 3:
+            try:
+                cursor.execute("ALTER TABLE evidence ADD COLUMN filesystem_analysis TEXT")
+            except sqlite3.OperationalError:
+                pass
+            cursor.execute("PRAGMA user_version = 3")
+            
         conn.commit()
         _schema_initialized = True
 

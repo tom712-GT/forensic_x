@@ -195,3 +195,30 @@ def detect_vendor_endpoint(evidence_id: str):
         return evidence
     except FileNotFoundError:
         _raise_audit("VENDOR_DETECT", "NOT_FOUND", 404, "STORED_FILE_MISSING", case_id=case_id, evidence_id=evidence_id, detail_msg="Stored evidence file missing")
+
+@router.post("/api/evidence/{evidence_id}/analyze-filesystem", response_model=EvidenceResponse)
+def analyze_filesystem_endpoint(evidence_id: str):
+    """
+    Analyzes the filesystem/container of the evidence by reading its header.
+    Allowed when status is INGESTED or HASHED.
+    """
+    evidence = EvidenceService.get_evidence_by_id(evidence_id)
+    if not evidence:
+        _raise_audit("FILESYSTEM_ANALYZE", "NOT_FOUND", 404, "UNKNOWN_EVIDENCE", evidence_id=evidence_id, detail_msg="Evidence not found")
+        
+    case_id = evidence.case_id
+    if evidence.status == "REGISTERED":
+        _raise_audit("FILESYSTEM_ANALYZE", "REJECTED", 409, "NOT_INGESTED", case_id=case_id, evidence_id=evidence_id, detail_msg="Evidence must be ingested before filesystem analysis")
+        
+    try:
+        EvidenceService.analyze_evidence_filesystem(evidence)
+        
+        details = {
+            "container_type": evidence.filesystem_analysis["container_type"],
+            "filesystem_type": evidence.filesystem_analysis["filesystem_type"]
+        }
+            
+        _audit("FILESYSTEM_ANALYZE", "SUCCESS", 200, case_id=case_id, evidence_id=evidence_id, details=details)
+        return evidence
+    except FileNotFoundError:
+        _raise_audit("FILESYSTEM_ANALYZE", "NOT_FOUND", 404, "STORED_FILE_MISSING", case_id=case_id, evidence_id=evidence_id, detail_msg="Stored evidence file missing")

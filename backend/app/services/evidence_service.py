@@ -230,3 +230,23 @@ class EvidenceService:
         
         EvidenceRepository.update_vendor_detection(evidence.evidence_id, res)
         evidence.vendor_detection = res
+
+    @staticmethod
+    def analyze_evidence_filesystem(evidence: Evidence) -> None:
+        """
+        Reads the first 8192 bytes and detects filesystem/container.
+        Does not change status, sha256, stored_size or file contents.
+        """
+        if not evidence.stored_path or not os.path.exists(evidence.stored_path):
+            raise FileNotFoundError("Stored evidence file missing")
+            
+        with open(evidence.stored_path, "rb") as f:
+            # Need at least 8192 for EXT4 which is at 1080 bytes offset
+            header = f.read(8192)
+            
+        from app.forensic.filesystem_inspector import inspect_filesystem
+        res = inspect_filesystem(header)
+        res["detected_at"] = datetime.now(timezone.utc).isoformat()
+        
+        EvidenceRepository.update_filesystem_analysis(evidence.evidence_id, res)
+        evidence.filesystem_analysis = res

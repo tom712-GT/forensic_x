@@ -27,7 +27,7 @@ def test_audit_schema_exists(tmp_path, monkeypatch):
         
         # Check version
         cursor.execute("PRAGMA user_version")
-        assert cursor.fetchone()[0] == 2
+        assert cursor.fetchone()[0] == 3
 
 def test_upgrade_from_v1(tmp_path, monkeypatch):
     test_db = tmp_path / "test_upgrade_x.db"
@@ -79,7 +79,7 @@ def test_upgrade_from_v1(tmp_path, monkeypatch):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("PRAGMA user_version")
-        assert cursor.fetchone()[0] == 2
+        assert cursor.fetchone()[0] == 3
         
         cursor.execute("SELECT case_name FROM cases WHERE case_id = 'case-1'")
         assert cursor.fetchone()[0] == 'C1'

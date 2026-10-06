@@ -20,6 +20,12 @@ class DetectionResult(BaseModel):
     model_config = ConfigDict(extra='allow')
     detected_at: datetime
 
+class FilesystemDetectionResult(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    detected_at: datetime
+    container_type: str
+    filesystem_type: str
+
 class EvidenceResponse(BaseModel):
     """
     Schema for returning Evidence data in responses.
@@ -42,6 +48,7 @@ class EvidenceResponse(BaseModel):
     hashed_at: Optional[datetime] = None
     format_detection: Optional[DetectionResult] = None
     vendor_detection: Optional[DetectionResult] = None
+    filesystem_analysis: Optional[FilesystemDetectionResult] = None
 
 class EvidenceVerifyResponse(BaseModel):
     """
