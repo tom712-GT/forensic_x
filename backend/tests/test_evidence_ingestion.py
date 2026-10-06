@@ -199,3 +199,51 @@ def test_router_maps_file_exists_error(client, monkeypatch, tmp_path):
         
     assert resp.status_code == 409
     assert resp.json()["detail"] == "Evidence already ingested"
+
+def test_unexpected_ingest_error_is_generic(client, monkeypatch, tmp_path):
+    from app.services.evidence_service import EvidenceService
+    
+    def mock_ingest(*args, **kwargs):
+        raise PermissionError("[WinError 5] Access denied: 'D:\\secret\\raw\\x'")
+        
+    monkeypatch.setattr(EvidenceService, "ingest_evidence_file", mock_ingest)
+    
+    case_id = create_case(client)
+    ev_id = register_evidence(client, case_id, file_size=3)
+    
+    test_file = tmp_path / "test.bin"
+    test_file.write_bytes(b"abc")
+    
+    with open(test_file, "rb") as f:
+        resp = client.post(f"/api/evidence/{ev_id}/file", files={"file": ("test.bin", f)})
+        
+    assert resp.status_code == 500
+    assert resp.json()["detail"] == "Internal error while storing evidence"
+    
+    text = resp.text
+    assert "secret" not in text
+    assert "D:\\" not in text
+
+def test_unexpected_value_error_is_generic(client, monkeypatch, tmp_path):
+    from app.services.evidence_service import EvidenceService
+    
+    def mock_ingest(*args, **kwargs):
+        raise ValueError("D:\\secret\\x")
+        
+    monkeypatch.setattr(EvidenceService, "ingest_evidence_file", mock_ingest)
+    
+    case_id = create_case(client)
+    ev_id = register_evidence(client, case_id, file_size=3)
+    
+    test_file = tmp_path / "test.bin"
+    test_file.write_bytes(b"abc")
+    
+    with open(test_file, "rb") as f:
+        resp = client.post(f"/api/evidence/{ev_id}/file", files={"file": ("test.bin", f)})
+        
+    assert resp.status_code == 500
+    assert resp.json()["detail"] == "Internal error while storing evidence"
+    
+    text = resp.text
+    assert "secret" not in text
+    assert "D:\\" not in text

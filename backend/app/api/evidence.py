@@ -1,7 +1,10 @@
 from fastapi import APIRouter, HTTPException, status, UploadFile, File
 from typing import List
+import logging
 from app.schemas.evidence import EvidenceCreate, EvidenceResponse, EvidenceVerifyResponse
 from app.services.evidence_service import EvidenceService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["evidence"])
 
@@ -57,11 +60,13 @@ def ingest_evidence(evidence_id: str, file: UploadFile = File(...)):
             raise HTTPException(status_code=413, detail="File too large")
         if str(e) == "Uploaded file is empty":
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Unexpected ValueError during ingest")
+        raise HTTPException(status_code=500, detail="Internal error while storing evidence")
     except FileExistsError:
         raise HTTPException(status_code=409, detail="Evidence already ingested")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Unexpected exception during ingest")
+        raise HTTPException(status_code=500, detail="Internal error while storing evidence")
         
     return evidence
 
