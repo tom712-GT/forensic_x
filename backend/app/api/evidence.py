@@ -86,6 +86,10 @@ def hash_evidence(evidence_id: str):
         EvidenceService.hash_evidence(evidence)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Stored evidence file missing")
+    except RuntimeError as e:
+        if "already exists" in str(e) or "already hashed" in str(e):
+            raise HTTPException(status_code=409, detail="Evidence already hashed")
+        raise HTTPException(status_code=500, detail=str(e))
         
     return evidence
 
