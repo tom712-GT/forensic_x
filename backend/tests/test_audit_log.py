@@ -387,3 +387,99 @@ def test_audit_failure_does_not_break_requests(client, monkeypatch, tmp_path):
     
     ev_resp = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "a", "evidence_type": "VIDEO", "file_size": 3})
     assert ev_resp.status_code == 201
+
+def test_audit_endpoint_filters_and_order(client, tmp_path):
+    case_resp = client.post("/api/cases", json={"case_name": "Read Test Case"})
+    case_id = case_resp.json()["case_id"]
+    
+    ev_resp1 = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "1.bin", "evidence_type": "VIDEO", "file_size": 1})
+    ev1_id = ev_resp1.json()["evidence_id"]
+    
+    ev_resp2 = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "2.bin", "evidence_type": "VIDEO", "file_size": 2})
+    ev2_id = ev_resp2.json()["evidence_id"]
+    
+    # query case_id
+    resp_case = client.get(f"/api/audit-log?case_id={case_id}")
+    assert resp_case.status_code == 200
+    rows = resp_case.json()
+    assert len(rows) == 3 # case create + 2 evidence register
+    
+    # verify order by audit_id ascending
+    audit_ids = [r["audit_id"] for r in rows]
+    assert audit_ids == sorted(audit_ids)
+    
+    # query evidence_id
+    resp_ev = client.get(f"/api/audit-log?evidence_id={ev1_id}")
+    assert resp_ev.status_code == 200
+    ev_rows = resp_ev.json()
+    assert len(ev_rows) == 1
+    assert ev_rows[0]["action"] == "EVIDENCE_REGISTER"
+    assert ev_rows[0]["evidence_id"] == ev1_id
+    
+    # limit works
+    resp_limit = client.get(f"/api/audit-log?case_id={case_id}&limit=2")
+    assert resp_limit.status_code == 200
+    assert len(resp_limit.json()) == 2
+    
+    # limits out of bounds
+    assert client.get("/api/audit-log?limit=0").status_code == 422
+    assert client.get("/api/audit-log?limit=501").status_code == 422
+
+def test_audit_endpoint_timestamps_and_actor(client):
+    case_resp = client.post("/api/cases", json={"case_name": "Time Case"})
+    case_id = case_resp.json()["case_id"]
+    
+    resp = client.get(f"/api/audit-log?case_id={case_id}")
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) > 0
+    
+    for r in rows:
+        assert r["timestamp"].endswith("Z")
+        assert r["actor"] == "UNAUTHENTICATED"
+
+def test_audit_survives_restart(client, tmp_path):
+    case_resp = client.post("/api/cases", json={"case_name": "Restart Case"})
+    case_id = case_resp.json()["case_id"]
+    
+    ev_resp = client.post(f"/api/cases/{case_id}/evidence", json={"original_filename": "a", "evidence_type": "VIDEO", "file_size": 4})
+    ev_id = ev_resp.json()["evidence_id"]
+    
+    test_file = tmp_path / "a.bin"
+    test_file.write_bytes(b"IMKH")
+    with open(test_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("a.bin", f)})
+        
+    client.post(f"/api/evidence/{ev_id}/hash")
+    
+    resp_before = client.get(f"/api/audit-log?evidence_id={ev_id}")
+    before_data = resp_before.json()
+    
+    import subprocess
+    from app.db.database import DB_PATH
+    from app.services.evidence_service import RAW_STORAGE_ROOT
+    
+    code = f"""
+import sys
+sys.path.append(r'D:\\FORENSIC-X\\backend')
+from fastapi.testclient import TestClient
+from app.main import app
+import app.db.database as db
+from pathlib import Path
+db.DB_PATH = Path(r'{DB_PATH}')
+db._schema_initialized = False
+
+client = TestClient(app)
+resp = client.get("/api/audit-log?evidence_id={ev_id}")
+print(resp.json())
+"""
+    
+    script_path = tmp_path / "restart.py"
+    script_path.write_text(code, encoding="utf-8")
+    
+    import sys
+    result = subprocess.run([sys.executable, str(script_path)], capture_output=True, text=True, check=True)
+    import ast
+    after_data = ast.literal_eval(result.stdout.strip())
+    
+    assert before_data == after_data

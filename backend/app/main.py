@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.api.cases import router as cases_router
 from app.api.evidence import router as evidence_router
+from app.api.audit import router as audit_router
 
 app = FastAPI(title="FORENSIC-X API")
 
@@ -8,6 +9,8 @@ app = FastAPI(title="FORENSIC-X API")
 app.include_router(cases_router)
 # Register the evidence router
 app.include_router(evidence_router)
+# Register the audit router
+app.include_router(audit_router)
 
 @app.get("/")
 def read_root():
