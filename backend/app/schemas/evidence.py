@@ -26,6 +26,7 @@ class FilesystemDetectionResult(BaseModel):
     container_type: str
     filesystem_type: str
     status: str
+    structure: Optional[dict] = None
 
 class EvidenceResponse(BaseModel):
     """

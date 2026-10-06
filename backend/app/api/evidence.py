@@ -218,6 +218,8 @@ def analyze_filesystem_endpoint(evidence_id: str):
             "filesystem_type": evidence.filesystem_analysis["filesystem_type"],
             "status": evidence.filesystem_analysis["status"]
         }
+        if "structure" in evidence.filesystem_analysis and evidence.filesystem_analysis["structure"]:
+            details["structure"] = evidence.filesystem_analysis["structure"]
             
         _audit("FILESYSTEM_ANALYZE", "SUCCESS", 200, case_id=case_id, evidence_id=evidence_id, details=details)
         return evidence
