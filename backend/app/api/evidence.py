@@ -257,7 +257,8 @@ def recover_endpoint(evidence_id: str):
                 "recovered_size": a.recovered_size,
                 "detected_type": a.detected_type,
                 "recovery_timestamp": a.recovery_timestamp.isoformat(),
-                "status": a.status
+                "status": a.status,
+                "artifact_hash": a.artifact_hash
             })
             
         _audit("ARTIFACT_RECOVERY", "SUCCESS", 200, case_id=case_id, evidence_id=evidence_id, details={

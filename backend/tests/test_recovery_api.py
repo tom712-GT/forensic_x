@@ -51,6 +51,8 @@ def test_recovery_api_happy_path(tmp_path):
     assert a["source_offset"] == 100
     assert a["recovered_size"] == 19
     assert a["detected_type"] == "JPEG"
+    assert a["status"] == "RECOVERED"
+    assert "artifact_hash" in a
     assert "output_path" not in a
     
     # 3. Source evidence remains unchanged

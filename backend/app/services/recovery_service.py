@@ -1,10 +1,11 @@
 import os
 import stat
+import hashlib
 from pathlib import Path
 from app.models.evidence import Evidence
 from app.models.recovery import RecoveredArtifact
 from app.repositories.recovery_repository import RecoveryRepository
-from app.forensic.carver import carve_jpeg
+from app.forensic.carver import carve_artifacts
 
 RECOVERED_STORAGE_ROOT = Path(__file__).resolve().parents[3] / "data" / "recovered"
 
@@ -18,18 +19,36 @@ class RecoveryService:
         recovered_dir.mkdir(parents=True, exist_ok=True)
         
         results = []
+        # Basic deterministic deduplication using offset and type.
+        seen_artifacts = set()
+        
         with open(evidence.stored_path, "rb") as f:
-            start_offset, data = carve_jpeg(f)
-            if data:
+            for art_dict in carve_artifacts(f):
+                offset = art_dict["start_offset"]
+                art_type = art_dict["type"]
+                data = art_dict["data"]
+                status = art_dict["status"]
+                
+                dedup_key = f"{offset}:{art_type}"
+                if dedup_key in seen_artifacts:
+                    continue
+                seen_artifacts.add(dedup_key)
+                
+                artifact_hash = hashlib.sha256(data).hexdigest()
+                
                 artifact = RecoveredArtifact(
                     evidence_id=evidence.evidence_id,
                     case_id=evidence.case_id,
-                    source_offset=start_offset,
+                    source_offset=offset,
                     recovered_size=len(data),
-                    detected_type="JPEG",
-                    output_path=""
+                    detected_type=art_type,
+                    output_path="",
+                    artifact_hash=artifact_hash,
+                    status=status
                 )
-                output_file = recovered_dir / f"{artifact.artifact_id}.jpeg"
+                
+                extension = art_type.lower()
+                output_file = recovered_dir / f"{artifact.artifact_id}.{extension}"
                 artifact.output_path = str(output_file)
                 
                 with open(output_file, "wb") as out_f:

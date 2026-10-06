@@ -10,3 +10,4 @@ class RecoveredArtifactResponse(BaseModel):
     detected_type: str
     recovery_timestamp: datetime
     status: str
+    artifact_hash: str | None = None

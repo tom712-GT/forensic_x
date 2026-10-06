@@ -10,8 +10,8 @@ class RecoveryRepository:
                 INSERT INTO recovered_artifacts (
                     artifact_id, evidence_id, case_id, source_offset,
                     recovered_size, detected_type, recovery_timestamp,
-                    output_path, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    output_path, status, artifact_hash
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     artifact.artifact_id,
@@ -22,7 +22,8 @@ class RecoveryRepository:
                     artifact.detected_type,
                     artifact.recovery_timestamp.isoformat(),
                     artifact.output_path,
-                    artifact.status
+                    artifact.status,
+                    artifact.artifact_hash
                 )
             )
         return artifact

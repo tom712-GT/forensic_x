@@ -114,6 +114,13 @@ def _init_schema(conn):
             """)
             cursor.execute("PRAGMA user_version = 4")
             
+        if version < 5:
+            try:
+                cursor.execute("ALTER TABLE recovered_artifacts ADD COLUMN artifact_hash TEXT")
+            except sqlite3.OperationalError:
+                pass
+            cursor.execute("PRAGMA user_version = 5")
+            
         conn.commit()
         _schema_initialized = True
 
