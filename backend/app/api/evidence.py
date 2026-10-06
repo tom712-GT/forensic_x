@@ -228,3 +228,44 @@ def analyze_filesystem_endpoint(evidence_id: str):
     except Exception:
         logger.exception("Unexpected exception during filesystem analysis")
         _raise_audit("FILESYSTEM_ANALYZE", "ERROR", 500, "INTERNAL_ERROR", case_id=case_id, evidence_id=evidence_id, detail_msg="Internal error while analyzing filesystem")
+
+@router.post("/api/evidence/{evidence_id}/recover", response_model=List[dict])
+def recover_endpoint(evidence_id: str):
+    """
+    Minimally recovers artifacts from ingested evidence.
+    Allowed when status is INGESTED or HASHED.
+    """
+    evidence = EvidenceService.get_evidence_by_id(evidence_id)
+    if not evidence:
+        _raise_audit("ARTIFACT_RECOVERY", "NOT_FOUND", 404, "UNKNOWN_EVIDENCE", evidence_id=evidence_id, detail_msg="Evidence not found")
+        
+    case_id = evidence.case_id
+    if evidence.status == "REGISTERED":
+        _raise_audit("ARTIFACT_RECOVERY", "REJECTED", 409, "NOT_INGESTED", case_id=case_id, evidence_id=evidence_id, detail_msg="Evidence must be ingested before recovery")
+        
+    try:
+        from app.services.recovery_service import RecoveryService
+        artifacts = RecoveryService.recover_artifacts(evidence)
+        
+        resp = []
+        for a in artifacts:
+            resp.append({
+                "artifact_id": a.artifact_id,
+                "evidence_id": a.evidence_id,
+                "case_id": a.case_id,
+                "source_offset": a.source_offset,
+                "recovered_size": a.recovered_size,
+                "detected_type": a.detected_type,
+                "recovery_timestamp": a.recovery_timestamp.isoformat(),
+                "status": a.status
+            })
+            
+        _audit("ARTIFACT_RECOVERY", "SUCCESS", 200, case_id=case_id, evidence_id=evidence_id, details={
+            "artifacts_recovered": len(artifacts)
+        })
+        return resp
+    except FileNotFoundError:
+        _raise_audit("ARTIFACT_RECOVERY", "NOT_FOUND", 404, "STORED_FILE_MISSING", case_id=case_id, evidence_id=evidence_id, detail_msg="Stored evidence file missing")
+    except Exception:
+        logger.exception("Unexpected exception during artifact recovery")
+        _raise_audit("ARTIFACT_RECOVERY", "ERROR", 500, "INTERNAL_ERROR", case_id=case_id, evidence_id=evidence_id, detail_msg="Internal error while recovering artifacts")

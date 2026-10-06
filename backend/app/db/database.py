@@ -97,6 +97,23 @@ def _init_schema(conn):
                 pass
             cursor.execute("PRAGMA user_version = 3")
             
+        if version < 4:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS recovered_artifacts (
+                    artifact_id TEXT PRIMARY KEY,
+                    evidence_id TEXT NOT NULL,
+                    case_id TEXT NOT NULL,
+                    source_offset INTEGER NOT NULL,
+                    recovered_size INTEGER NOT NULL,
+                    detected_type TEXT NOT NULL,
+                    recovery_timestamp TEXT NOT NULL,
+                    output_path TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    FOREIGN KEY(evidence_id) REFERENCES evidence(evidence_id)
+                )
+            """)
+            cursor.execute("PRAGMA user_version = 4")
+            
         conn.commit()
         _schema_initialized = True
 
