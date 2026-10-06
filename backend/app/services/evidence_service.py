@@ -12,6 +12,9 @@ from app.forensic.format_detector import detect_format
 from app.forensic.vendor_detector import detect_vendor
 from app.repositories.evidence_repository import EvidenceRepository
 
+class BaselineAlreadyExistsError(RuntimeError):
+    pass
+
 RAW_STORAGE_ROOT = Path(__file__).resolve().parents[3] / "data" / "raw"
 
 class EvidenceService:
@@ -167,7 +170,7 @@ class EvidenceService:
             evidence.hashed_at = hashed_at
             evidence.status = "HASHED"
         else:
-            raise RuntimeError("Baseline hash already exists and cannot be overwritten")
+            raise BaselineAlreadyExistsError("Baseline hash already exists and cannot be overwritten")
 
     @staticmethod
     def verify_evidence(evidence: Evidence) -> dict:

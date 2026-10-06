@@ -139,7 +139,7 @@ def test_missing_file_simulation(client, tmp_path):
 
 def test_hash_race_keeps_baseline(client, tmp_path):
     from app.repositories.evidence_repository import EvidenceRepository
-    from app.services.evidence_service import EvidenceService
+    from app.services.evidence_service import EvidenceService, BaselineAlreadyExistsError
     import pytest
     
     case_id = create_case(client)
@@ -154,17 +154,17 @@ def test_hash_race_keeps_baseline(client, tmp_path):
     api_resp = client.post(f"/api/evidence/{ev_id}/hash")
     baseline = api_resp.json()["sha256"]
     
-    with pytest.raises(RuntimeError):
+    with pytest.raises(BaselineAlreadyExistsError):
         EvidenceService.hash_evidence(stale_evidence)
         
     final_evidence = EvidenceRepository.get_by_id(ev_id)
     assert final_evidence.sha256 == baseline
 
 def test_hash_router_maps_runtime_error_to_409(client, monkeypatch, tmp_path):
-    from app.services.evidence_service import EvidenceService
+    from app.services.evidence_service import EvidenceService, BaselineAlreadyExistsError
     
     def mock_hash(*args, **kwargs):
-        raise RuntimeError("Baseline hash already exists and cannot be overwritten")
+        raise BaselineAlreadyExistsError("Baseline hash already exists and cannot be overwritten")
         
     monkeypatch.setattr(EvidenceService, "hash_evidence", mock_hash)
     
@@ -179,6 +179,27 @@ def test_hash_router_maps_runtime_error_to_409(client, monkeypatch, tmp_path):
     assert resp.status_code == 409
     assert resp.json()["detail"] == "Evidence already hashed"
 
+def test_hash_unexpected_error_is_generic(client, monkeypatch, tmp_path):
+    from app.services.evidence_service import EvidenceService
+    
+    def mock_hash(*args, **kwargs):
+        raise RuntimeError("D:\\secret\\x")
+        
+    monkeypatch.setattr(EvidenceService, "hash_evidence", mock_hash)
+    
+    case_id = create_case(client)
+    ev_id = register_evidence(client, case_id)
+    test_file = tmp_path / "abc.bin"
+    test_file.write_bytes(b"abc")
+    with open(test_file, "rb") as f:
+        client.post(f"/api/evidence/{ev_id}/file", files={"file": ("abc.bin", f)})
+        
+    resp = client.post(f"/api/evidence/{ev_id}/hash")
+    
+    assert resp.status_code == 500
+    assert resp.json()["detail"] == "Internal error while hashing evidence"
+    assert "secret" not in resp.text
+    assert "D:" not in resp.text
 import pytest
 
 @pytest.mark.parametrize("endpoint,method", [

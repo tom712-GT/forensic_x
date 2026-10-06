@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status, UploadFile, File
 from typing import List
 import logging
 from app.schemas.evidence import EvidenceCreate, EvidenceResponse, EvidenceVerifyResponse
-from app.services.evidence_service import EvidenceService
+from app.services.evidence_service import EvidenceService, BaselineAlreadyExistsError
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +86,11 @@ def hash_evidence(evidence_id: str):
         EvidenceService.hash_evidence(evidence)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Stored evidence file missing")
-    except RuntimeError as e:
-        if "already exists" in str(e) or "already hashed" in str(e):
-            raise HTTPException(status_code=409, detail="Evidence already hashed")
-        raise HTTPException(status_code=500, detail=str(e))
+    except BaselineAlreadyExistsError:
+        raise HTTPException(status_code=409, detail="Evidence already hashed")
+    except Exception:
+        logger.exception("Unexpected exception during hash")
+        raise HTTPException(status_code=500, detail="Internal error while hashing evidence")
         
     return evidence
 
