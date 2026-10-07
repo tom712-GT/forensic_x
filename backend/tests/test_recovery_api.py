@@ -63,8 +63,8 @@ def test_recovery_api_happy_path(tmp_path):
     # The output_path is in data/recovered/<case_id>/<evidence_id>/<artifact_id>.jpeg
     import sys
     from pathlib import Path
-    backend_dir = Path(sys.modules['app.main'].__file__).resolve().parents[2]
-    recovered_dir = backend_dir / "data" / "recovered" / case_id / evidence_id
+    import app.services.recovery_service as recovery_service
+    recovered_dir = recovery_service.RECOVERED_STORAGE_ROOT / case_id / evidence_id
     
     recovered_file = recovered_dir / f"{a['artifact_id']}.jpeg"
     assert recovered_file.exists()

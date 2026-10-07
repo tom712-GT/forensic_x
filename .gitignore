@@ -7,3 +7,4 @@ data/working/
 data/test/
 data/db/
 .pytest_cache/
+data/recovered/
