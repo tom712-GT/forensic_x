@@ -125,6 +125,23 @@ def _init_schema(conn):
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_recovered_artifacts_dedup ON recovered_artifacts(evidence_id, source_offset, detected_type)")
             cursor.execute("PRAGMA user_version = 6")
             
+        if version < 7:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS metadata_extractions (
+                    metadata_id TEXT PRIMARY KEY,
+                    subject_type TEXT NOT NULL,
+                    subject_id TEXT NOT NULL,
+                    case_id TEXT NOT NULL,
+                    container TEXT NOT NULL,
+                    parser_version TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    result TEXT NOT NULL,
+                    extracted_at TEXT NOT NULL
+                )
+            """)
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_metadata_subject ON metadata_extractions(subject_type, subject_id)")
+            cursor.execute("PRAGMA user_version = 7")
+            
         conn.commit()
         _schema_initialized = True
 
