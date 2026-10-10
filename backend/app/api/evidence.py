@@ -2,8 +2,11 @@ from fastapi import APIRouter, HTTPException, status, UploadFile, File
 from typing import List
 import logging
 from app.schemas.evidence import EvidenceCreate, EvidenceResponse, EvidenceVerifyResponse
+from app.schemas.metadata import MetadataResponse
 from app.services.evidence_service import EvidenceService, BaselineAlreadyExistsError
 from app.services.audit_service import AuditService
+from app.services.metadata_service import MetadataService
+from app.repositories.metadata_repository import MetadataRepository
 
 logger = logging.getLogger(__name__)
 
@@ -270,3 +273,46 @@ def recover_endpoint(evidence_id: str):
     except Exception:
         logger.exception("Unexpected exception during artifact recovery")
         _raise_audit("ARTIFACT_RECOVERY", "ERROR", 500, "INTERNAL_ERROR", case_id=case_id, evidence_id=evidence_id, detail_msg="Internal error while recovering artifacts")
+
+@router.post("/api/evidence/{evidence_id}/extract-metadata", response_model=MetadataResponse)
+def extract_metadata_endpoint(evidence_id: str):
+    evidence = EvidenceService.get_evidence_by_id(evidence_id)
+    if not evidence:
+        _raise_audit("METADATA_EXTRACT", "NOT_FOUND", 404, "UNKNOWN_EVIDENCE", evidence_id=evidence_id, detail_msg="Evidence not found")
+        
+    case_id = evidence.case_id
+    if evidence.status == "REGISTERED":
+        _raise_audit("METADATA_EXTRACT", "REJECTED", 409, "NOT_INGESTED", case_id=case_id, evidence_id=evidence_id, detail_msg="Evidence must be ingested before metadata extraction")
+        
+    try:
+        res = MetadataService.extract(evidence)
+        if not res.get("applicable", True):
+            _raise_audit("METADATA_EXTRACT", "REJECTED", 409, res["reason"], case_id=case_id, evidence_id=evidence_id, detail_msg="Metadata extraction not applicable: run format detection first or format unsupported")
+            
+        details = {
+            "container": res["container"],
+            "status": res["status"],
+            "field_count": len(res.get("result", {}).get("fields", []))
+        }
+        _audit("METADATA_EXTRACT", "SUCCESS", 200, case_id=case_id, evidence_id=evidence_id, details=details)
+        return res
+    except FileNotFoundError:
+        _raise_audit("METADATA_EXTRACT", "NOT_FOUND", 404, "STORED_FILE_MISSING", case_id=case_id, evidence_id=evidence_id, detail_msg="Stored evidence file missing")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Unexpected exception during metadata extraction")
+        _audit("METADATA_EXTRACT", "ERROR", 500, case_id=case_id, evidence_id=evidence_id, details={"reason": "INTERNAL_ERROR"})
+        raise HTTPException(status_code=500, detail="Internal error while extracting metadata")
+
+@router.get("/api/evidence/{evidence_id}/metadata", response_model=MetadataResponse)
+def get_metadata_endpoint(evidence_id: str):
+    evidence = EvidenceService.get_evidence_by_id(evidence_id)
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+        
+    res = MetadataRepository.get("EVIDENCE", evidence_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="Metadata not extracted")
+        
+    return res
