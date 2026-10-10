@@ -6,11 +6,15 @@ from app.api.audit import router as audit_router
 app = FastAPI(title="FORENSIC-X API")
 
 # Register the cases router
+from app.api.timeline import router as timeline_router
+
 app.include_router(cases_router)
 # Register the evidence router
 app.include_router(evidence_router)
 # Register the audit router
 app.include_router(audit_router)
+# Register timeline
+app.include_router(timeline_router)
 
 @app.get("/")
 def read_root():
