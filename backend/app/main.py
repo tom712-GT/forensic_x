@@ -9,6 +9,7 @@ app = FastAPI(title="FORENSIC-X API")
 from app.api.timeline import router as timeline_router
 from app.api.calibration import router as calibration_router
 from app.api.gaps import router as gaps_router
+from app.api.correlation import router as correlation_router
 
 app.include_router(cases_router)
 # Register the evidence router
@@ -19,6 +20,7 @@ app.include_router(audit_router)
 app.include_router(timeline_router)
 app.include_router(calibration_router)
 app.include_router(gaps_router)
+app.include_router(correlation_router)
 
 @app.get("/")
 def read_root():

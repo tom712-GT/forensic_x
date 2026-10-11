@@ -119,17 +119,7 @@ class GapService:
         }
 
     @staticmethod
-    def get_gaps(
-        case_id: str,
-        group: Optional[str] = None,
-        min_gap_seconds: float = 0.0,
-        limit: int = 100,
-        offset: int = 0,
-    ):
-        case_obj = CaseRepository.get_by_id(case_id)
-        if not case_obj:
-            raise HTTPException(status_code=404, detail="Case not found")
-
+    def collect_intervals(case_id: str, groups: Optional[set] = None) -> dict:
         import app.services.timeline_service as ts_mod
 
         cap = ts_mod.TIMELINE_MAX_ROWS
@@ -172,9 +162,11 @@ class GapService:
         unplaced = []
         intervals_by_group = {}
 
+        groups_set = set(groups) if groups is not None else None
+
         for eid in ev_ids:
             group_label = groups_map.get(eid, "DEFAULT")
-            if group is not None and group_label != group:
+            if groups_set is not None and group_label not in groups_set:
                 continue
 
             # Duration extraction
@@ -273,6 +265,36 @@ class GapService:
                 "start_latest": start_latest_dt,
                 "duration_seconds": dur_float,
             })
+
+        unknown_length.sort(key=lambda x: (x["group_label"], x["evidence_id"]))
+        unplaced.sort(key=lambda x: (x["group_label"], x["evidence_id"]))
+
+        return {
+            "intervals_by_group": intervals_by_group,
+            "unknown_length": unknown_length,
+            "unplaced": unplaced,
+            "truncated": is_truncated,
+        }
+
+    @staticmethod
+    def get_gaps(
+        case_id: str,
+        group: Optional[str] = None,
+        min_gap_seconds: float = 0.0,
+        limit: int = 100,
+        offset: int = 0,
+    ):
+        case_obj = CaseRepository.get_by_id(case_id)
+        if not case_obj:
+            raise HTTPException(status_code=404, detail="Case not found")
+
+        collected = GapService.collect_intervals(
+            case_id, {group} if group is not None else None
+        )
+        intervals_by_group = collected["intervals_by_group"]
+        unknown_length = collected["unknown_length"]
+        unplaced = collected["unplaced"]
+        is_truncated = collected["truncated"]
 
         all_included_gaps = []
         group_summary_list = []
