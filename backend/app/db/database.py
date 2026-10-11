@@ -142,6 +142,28 @@ def _init_schema(conn):
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_metadata_subject ON metadata_extractions(subject_type, subject_id)")
             cursor.execute("PRAGMA user_version = 7")
             
+        if version < 8:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS calibration_references (
+                    reference_id TEXT PRIMARY KEY,
+                    evidence_id TEXT NOT NULL,
+                    case_id TEXT NOT NULL,
+                    device_time TEXT NOT NULL,
+                    reference_time TEXT NOT NULL,
+                    offset_seconds REAL NOT NULL,
+                    uncertainty_seconds REAL NOT NULL,
+                    note TEXT,
+                    flags TEXT NOT NULL,
+                    entered_at TEXT NOT NULL,
+                    entered_by TEXT NOT NULL,
+                    superseded_at TEXT,
+                    superseded_by TEXT
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_calibration_evidence ON calibration_references(evidence_id)")
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_calibration_active ON calibration_references(evidence_id) WHERE superseded_at IS NULL")
+            cursor.execute("PRAGMA user_version = 8")
+            
         conn.commit()
         _schema_initialized = True
 
