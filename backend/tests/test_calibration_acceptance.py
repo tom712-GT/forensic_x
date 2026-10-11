@@ -392,7 +392,7 @@ def test_c21_audit(client):
 
 def test_c22_schema(client):
     with get_connection() as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 8
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 9
         cols = {r[1] for r in c.execute("PRAGMA table_info(calibration_references)")}
         idx = {r[1] for r in c.execute("PRAGMA index_list(calibration_references)")}
         sqls = " ".join(r[0] or "" for r in c.execute("SELECT sql FROM sqlite_master WHERE tbl_name='calibration_references'"))

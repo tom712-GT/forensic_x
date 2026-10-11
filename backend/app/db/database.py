@@ -164,6 +164,19 @@ def _init_schema(conn):
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_calibration_active ON calibration_references(evidence_id) WHERE superseded_at IS NULL")
             cursor.execute("PRAGMA user_version = 8")
             
+        if version < 9:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS evidence_groups (
+                    evidence_id TEXT PRIMARY KEY,
+                    case_id TEXT NOT NULL,
+                    group_label TEXT NOT NULL,
+                    set_at TEXT NOT NULL,
+                    set_by TEXT NOT NULL
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_evidence_groups_case ON evidence_groups(case_id)")
+            cursor.execute("PRAGMA user_version = 9")
+            
         conn.commit()
         _schema_initialized = True
 
