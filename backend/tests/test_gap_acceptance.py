@@ -421,7 +421,7 @@ def test_g20_truncation(client, monkeypatch):
 
 def test_g21_schema(client):
     with get_connection() as c:
-        assert c.execute("PRAGMA user_version").fetchone()[0] == 9
+        assert c.execute("PRAGMA user_version").fetchone()[0] == 10
         info = list(c.execute("PRAGMA table_info(evidence_groups)"))
         idx = {r[1] for r in c.execute("PRAGMA index_list(evidence_groups)")}
     assert {r[1] for r in info} == {"evidence_id", "case_id", "group_label", "set_at", "set_by"}

@@ -323,7 +323,7 @@ def test_x17_no_side_effects(client):
     mk(client, cid, T("10:00:00"), 600, "CamA")
     mk(client, cid, T("10:00:00"), 600, "CamB")
     before = snap()
-    assert before["v"] == 9
+    assert before["v"] == 10
     C(client, cid)
     C(client, cid, groups="CamA,CamB", min_groups=2, limit=1)
     corr(client, "nope")

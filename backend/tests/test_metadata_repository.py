@@ -7,7 +7,7 @@ def test_metadata_repository_1_schema():
     with get_connection() as conn:
         cursor = conn.execute("PRAGMA user_version")
         version = cursor.fetchone()[0]
-        assert version == 9
+        assert version == 10
         
         cursor = conn.execute("PRAGMA table_info(metadata_extractions)")
         columns = {row['name'] for row in cursor.fetchall()}
@@ -178,7 +178,7 @@ def test_metadata_repository_7_upgrade(tmp_path, monkeypatch):
         
     with database.get_connection() as conn:
         cursor = conn.execute("PRAGMA user_version")
-        assert cursor.fetchone()[0] == 9
+        assert cursor.fetchone()[0] == 10
         
         cursor = conn.execute("PRAGMA table_info(metadata_extractions)")
         assert len(cursor.fetchall()) > 0

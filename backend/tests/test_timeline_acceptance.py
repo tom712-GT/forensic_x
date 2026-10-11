@@ -357,7 +357,7 @@ def snap():
 def test_t16_no_side_effects(client):
     cid, eid = full(client)
     before = snap()
-    assert before["v"] == 9
+    assert before["v"] == 10
     tl(client, cid)
     tl(client, cid, kind="EVIDENCE_HASHED", limit=1)
     tl(client, cid, kind="BAD")

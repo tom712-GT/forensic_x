@@ -177,6 +177,18 @@ def _init_schema(conn):
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_evidence_groups_case ON evidence_groups(case_id)")
             cursor.execute("PRAGMA user_version = 9")
             
+        if version < 10:
+            try:
+                cursor.execute("ALTER TABLE audit_log ADD COLUMN prev_hash TEXT")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                cursor.execute("ALTER TABLE audit_log ADD COLUMN row_hash TEXT")
+            except sqlite3.OperationalError:
+                pass
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_prev_hash ON audit_log(prev_hash) WHERE prev_hash IS NOT NULL")
+            cursor.execute("PRAGMA user_version = 10")
+            
         conn.commit()
         _schema_initialized = True
 

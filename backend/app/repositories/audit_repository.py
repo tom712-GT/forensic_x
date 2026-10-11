@@ -2,6 +2,7 @@ import json
 import sqlite3
 from typing import List, Optional, Dict, Any
 from app.db.database import get_connection
+from app.forensic.audit_chain import GENESIS_HASH, compute_row_hash
 
 class AuditRepository:
     @staticmethod
@@ -27,10 +28,27 @@ class AuditRepository:
         details_json = json.dumps(details)
         
         with get_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.execute(
+                "SELECT row_hash FROM audit_log WHERE row_hash IS NOT NULL ORDER BY audit_id DESC LIMIT 1"
+            )
+            row = cursor.fetchone()
+            prev_hash = row[0] if (row and row[0] is not None) else GENESIS_HASH
+            row_hash = compute_row_hash(
+                prev_hash,
+                timestamp,
+                action,
+                outcome,
+                http_status,
+                case_id,
+                evidence_id,
+                actor,
+                details_json,
+            )
             conn.execute("""
-                INSERT INTO audit_log (timestamp, action, outcome, http_status, case_id, evidence_id, actor, details)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (timestamp, action, outcome, http_status, case_id, evidence_id, actor, details_json))
+                INSERT INTO audit_log (timestamp, action, outcome, http_status, case_id, evidence_id, actor, details, prev_hash, row_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (timestamp, action, outcome, http_status, case_id, evidence_id, actor, details_json, prev_hash, row_hash))
             
     @staticmethod
     def list_entries(
