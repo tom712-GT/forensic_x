@@ -11,6 +11,7 @@ from app.api.calibration import router as calibration_router
 from app.api.gaps import router as gaps_router
 from app.api.correlation import router as correlation_router
 from app.api.audit_chain import router as audit_chain_router
+from app.api.report import router as report_router
 
 app.include_router(cases_router)
 # Register the evidence router
@@ -23,6 +24,7 @@ app.include_router(calibration_router)
 app.include_router(gaps_router)
 app.include_router(correlation_router)
 app.include_router(audit_chain_router)
+app.include_router(report_router)
 
 @app.get("/")
 def read_root():
