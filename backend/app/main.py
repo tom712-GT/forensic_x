@@ -1,9 +1,17 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.api.cases import router as cases_router
 from app.api.evidence import router as evidence_router
 from app.api.audit import router as audit_router
 
 app = FastAPI(title="FORENSIC-X API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    allow_credentials=False,
+)
 
 # Register the cases router
 from app.api.timeline import router as timeline_router
